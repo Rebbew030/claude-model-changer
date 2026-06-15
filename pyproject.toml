@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=58.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-model-changer"
+version = "1.0.0"
+description = "Manage Claude Code model env profiles — switch between env presets"
+requires-python = ">=3.9"
+
+[project.scripts]
+claude-model-change = "claude_model_changer.cli:main"
