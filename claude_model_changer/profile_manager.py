@@ -108,12 +108,31 @@ def apply_profile(name: str) -> bool:
     return True
 
 
+def apply_default() -> None:
+    """Remove the 'env' key from settings.json entirely.
+
+    This restores Claude Code to its default configuration with no
+    custom environment variables set.
+    """
+    settings = read_settings()
+    if "env" in settings:
+        backup_current_env("default")
+        del settings["env"]
+        SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(SETTINGS_PATH, "w") as f:
+            json.dump(settings, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+
+
 def detect_current_profile_name() -> str:
     """Try to match current env to a saved profile (by value equality).
 
-    Returns the profile name if found, or '(unsaved)' if no match.
+    Returns the profile name if found, '(default)' if no env is set,
+    or '(unsaved)' if env is set but not matching any saved profile.
     """
     current_env = read_env()
+    if not current_env:
+        return "(default)"
     for name in list_profiles():
         if read_profile(name) == current_env:
             return name

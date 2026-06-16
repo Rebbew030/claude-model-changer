@@ -4,6 +4,7 @@ import sys
 from typing import Optional
 
 from .profile_manager import (
+    apply_default,
     apply_profile,
     delete_profile,
     detect_current_profile_name,
@@ -18,21 +19,28 @@ from .profile_manager import (
 
 
 def _pick_profile(action: str) -> Optional[str]:
-    """Show a numbered list of profiles and let the user pick one."""
+    """Show a numbered list of profiles and let the user pick one.
+
+    The "(default)" option (no env vars) is always available at index 0.
+    """
     profiles = list_profiles()
-    if not profiles:
-        print(f"\n  No profiles found. Create one first.\n")
-        return None
 
     print(f"\n  {action}:")
-    for i, name in enumerate(profiles, 1):
-        env = read_profile(name)
-        model = env.get("ANTHROPIC_MODEL", "?")
-        effort = env.get("CLAUDE_CODE_EFFORT_LEVEL", "?")
-        count = len(env)
-        print(f"    {i}. {name}  [{count} vars]  model={model}  effort={effort}")
+    print(f"    0. (default)  [no env vars — bare Claude Code]")
+
+    if not profiles:
+        print(f"\n  No custom profiles found.\n")
+    else:
+        for i, name in enumerate(profiles, 1):
+            env = read_profile(name)
+            model = env.get("ANTHROPIC_MODEL", "?")
+            effort = env.get("CLAUDE_CODE_EFFORT_LEVEL", "?")
+            count = len(env)
+            print(f"    {i}. {name}  [{count} vars]  model={model}  effort={effort}")
 
     choice = input("\n  Pick a profile (number): ").strip()
+    if choice == "0":
+        return "(default)"
     try:
         idx = int(choice) - 1
         if 0 <= idx < len(profiles):
@@ -124,6 +132,22 @@ def cmd_change():
     if name is None:
         return
 
+    if name == "(default)":
+        current = read_env()
+        if not current:
+            print("\n  Already using default (no env vars set).\n")
+            return
+        print(f"\n  This will remove all {len(current)} env var(s):")
+        for k, v in current.items():
+            print(f"    - {k} = {v}")
+        confirm = input("\n  Apply default profile? [y/N]: ").strip().lower()
+        if confirm == "y":
+            apply_default()
+            print("  ✅ Default profile applied (all env vars removed).\n")
+        else:
+            print("  Cancelled.\n")
+        return
+
     current = read_env()
     target = read_profile(name)
     _show_diff(current, target, name)
@@ -166,6 +190,9 @@ def cmd_edit():
     name = _pick_profile("Edit which profile?")
     if name is None:
         return
+    if name == "(default)":
+        print("\n  Cannot edit the default profile — it has no env vars.\n")
+        return
 
     current_env = read_profile(name)
     print(f"\n  Editing '{name}'...")
@@ -183,6 +210,9 @@ def cmd_delete():
     """Delete a profile."""
     name = _pick_profile("Delete which profile?")
     if name is None:
+        return
+    if name == "(default)":
+        print("\n  Cannot delete the default profile.\n")
         return
 
     confirm = input(f"\n  Delete profile '{name}'? Cannot undo. [y/N]: ").strip().lower()
@@ -257,7 +287,21 @@ def _dispatch_subcommand():
             name = args[1]
         else:
             name = _pick_profile("Apply which profile?")
-        if name and apply_profile(name):
+        if name == "(default)":
+            current = read_env()
+            if not current:
+                print("Already using default (no env vars set).")
+            else:
+                print(f"Removing {len(current)} env var(s):")
+                for k, v in current.items():
+                    print(f"  - {k} = {v}")
+                confirm = input("Apply default profile? [y/N]: ").strip().lower()
+                if confirm == "y":
+                    apply_default()
+                    print("✅ Default profile applied (all env vars removed).")
+                else:
+                    print("Cancelled.")
+        elif name and apply_profile(name):
             print(f"✅ Profile '{name}' applied.")
         elif name:
             print(f"❌ Profile '{name}' not found.")
@@ -278,6 +322,9 @@ def _dispatch_subcommand():
             print("Usage: claude-model-change edit <name>")
         else:
             name = args[1]
+            if name == "(default)":
+                print("Cannot edit the default profile — it has no env vars.")
+                return
             current = read_profile(name)
             if current is None:
                 print(f"❌ Profile '{name}' not found.")
@@ -292,6 +339,9 @@ def _dispatch_subcommand():
             print("Usage: claude-model-change delete <name>")
         else:
             name = args[1]
+            if name == "(default)":
+                print("Cannot delete the default profile.")
+                return
             confirm = input(f"Delete profile '{name}'? [y/N]: ").strip().lower()
             if confirm == "y":
                 if delete_profile(name):
